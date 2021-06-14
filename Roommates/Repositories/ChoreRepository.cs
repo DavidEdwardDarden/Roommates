@@ -5,7 +5,7 @@ using System.Text;
 using System.Threading.Tasks;
 using Microsoft.Data.SqlClient;
 using Roommates.Models;
-using System.Collections.Generic;
+
 
 namespace Roommates.Repositories
 {
@@ -65,7 +65,7 @@ namespace Roommates.Repositories
                         {
                             Id = idValue,
                             Name = nameValue
-                         
+
                         };
 
                         // ...and add that room object to our list.
@@ -95,12 +95,12 @@ namespace Roommates.Repositories
                     cmd.Parameters.AddWithValue("@id", id);
                     SqlDataReader reader = cmd.ExecuteReader();
 
-                    Room room = null;
+                    Chore chore = null;
 
                     // If we only expect a single row back from the database, we don't need a while loop.
                     if (reader.Read())
                     {
-                        room = new Room
+                        chore = new Chore
                         {
                             Id = id,
                             Name = reader.GetString(reader.GetOrdinal("Name"))
@@ -114,12 +114,69 @@ namespace Roommates.Repositories
             }
         }
 
+        public List<UnassignedChore> GetUnnassignedChores()
+        {
+            using (SqlConnection conn = Connection)
+            {
+                // Note, we must Open() the connection, the "using" block doesn't do that for us.
+                conn.Open();
+
+                // We must "use" commands too.
+                using (SqlCommand cmd = conn.CreateCommand())
+                {
+                    // Here we setup the command with the SQL we want to execute before we execute it.
+                    cmd.CommandText = "SELECT c.id, c.Name, rc.RoommateId FROM Chore c LEFT JOIN RoommateChore rc  ON c.Id = rc.ChoreId WHERE rc.id is null ";
+
+                    // Execute the SQL in the database and get a "reader" that will give us access to the data.
+                    SqlDataReader reader = cmd.ExecuteReader();
+
+                    // A list to hold the rooms we retrieve from the database.
+                    List<Chore> chores = new List<Chore>();
+
+                    // Read() will return true if there's more data to read
+                    while (reader.Read())
+                    {
+                        // The "ordinal" is the numeric position of the column in the query results.
+                        //  For our query, "Id" has an ordinal value of 0 and "Name" is 1.
+                        int idColumnPosition = reader.GetOrdinal("Id");
+
+                        // We user the reader's GetXXX methods to get the value for a particular ordinal.
+                        int idValue = reader.GetInt32(idColumnPosition);
+
+                        int nameColumnPosition = reader.GetOrdinal("Name");
+                        string nameValue = reader.GetString(nameColumnPosition);
+
+                        int maxOccupancyColumPosition = reader.GetOrdinal("MaxOccupancy");
+                        int maxOccupancy = reader.GetInt32(maxOccupancyColumPosition);
+
+                        // Now let's create a new room object using the data from the database.
+                        Chore chore = new Chore
+                        {
+                            Id = idValue,
+                            Name = nameValue
+
+                        };
+
+                        // ...and add that room object to our list.
+                        chores.Add(chore);
+                    }
+
+                    // We should Close() the reader. Unfortunately, a "using" block won't work here.
+                    reader.Close();
+
+                    // Return the list of rooms who whomever called this method.
+                    return chores;
+                }
+            }
+
+        }
+
         /// <summary>
         ///  Add a new room to the database
         ///   NOTE: This method sends data to the database,
         ///   it does not get anything from the database, so there is nothing to return.
         /// </summary>
-        public void Insert(Room room)
+        public void Insert(Chore chore)
         {
             using (SqlConnection conn = Connection)
             {
@@ -129,11 +186,10 @@ namespace Roommates.Repositories
                     cmd.CommandText = @"INSERT INTO Room (Name, MaxOccupancy) 
                                          OUTPUT INSERTED.Id 
                                          VALUES (@name, @maxOccupancy)";
-                    cmd.Parameters.AddWithValue("@name", room.Name);
-                    cmd.Parameters.AddWithValue("@maxOccupancy", room.MaxOccupancy);
+                    cmd.Parameters.AddWithValue("@name", chore.Name);
                     int id = (int)cmd.ExecuteScalar();
 
-                    room.Id = id;
+                    chore.Id = id;
                 }
             }
 
@@ -142,4 +198,4 @@ namespace Roommates.Repositories
 
     }
 }
-}
+
